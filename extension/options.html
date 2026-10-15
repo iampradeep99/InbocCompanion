@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Inbox Companion · Settings</title><link rel="stylesheet" href="styles.css"></head>
+<body class="options"><main>
+  <a class="back-link" href="popup.html">← Inbox Companion</a>
+  <div class="eyebrow">YOUR WORKSPACE</div><h1>Make yourself at home.</h1><p class="settings-intro">Pair your local backend, then connect your Google account.</p>
+  <form id="settings-form" class="card">
+    <label for="backend">Backend address</label><input id="backend" type="url" required placeholder="http://127.0.0.1:3210"><p class="hint">The Express server running on this computer.</p>
+    <label for="token">Pairing token</label><input id="token" type="password" required autocomplete="off" spellcheck="false"><p class="hint">Paste API_TOKEN from your backend .env file. Your NVIDIA key stays on the server.</p>
+    <label class="checkbox-label"><input id="reminders" type="checkbox"> Show desktop calendar reminders</label><p class="hint">Timed events: 15 minutes before. All-day events: from 9am. Chrome and the backend must be running.</p>
+    <button class="primary" type="submit">Save & test connection</button>
+    <p id="result" role="status"></p>
+  </form>
+  <form id="job-profile-form" class="card">
+    <h2>Find jobs that fit you</h2>
+    <p class="profile-intro">AI reads job emails against your profile. Only strong matches and direct messages from people appear in your inbox.</p>
+    <label for="job-profile">Resume summary & job preferences</label>
+    <textarea id="job-profile" class="profile-editor" maxlength="12000" placeholder="Target role: …&#10;Skills: …&#10;Experience: …&#10;Preferred locations / remote: …&#10;Other must-haves: …"></textarea>
+    <p class="hint">Include skills, experience, target roles, and location/remote preferences. Leave unknown details unspecified. This text is sent to NVIDIA for matching; contact details are not needed.</p>
+    <button type="submit" class="primary">Save job profile & recheck inbox</button>
+    <p id="profile-result" role="status"></p>
+  </form>
+  <section class="card"><h2>Google account</h2><p id="google-status">Save settings to check your connection.</p><div class="settings-actions"><button id="connect-google" class="primary">Connect / reconnect Google ↗</button><button id="disconnect" class="quiet danger">Disconnect & clear local data</button></div></section>
+  <section class="privacy-note"><h3>Your inbox, with care.</h3><p>Your job profile and matching emails (sender, subject, and up to 16,000 body characters) are sent to NVIDIA to identify relevant jobs, direct messages, and draft replies. Attachments are not sent to AI. Drafts are saved in Gmail and require your review before sending.</p><p>Choosing Generate with AI sends only the event form’s title, dates, location, and rough notes to NVIDIA. Suggestions are saved to Google Calendar only when you apply them and save the event.</p><p>Google tokens, your job profile, email text, drafts, and calendar data are encrypted in the local backend data folder. Disconnect clears that local data and revokes Google access; drafts already saved in Gmail remain there. The pairing token is stored in this Chrome profile.</p></section>
+</main><script type="module" src="options.js"></script></body></html>

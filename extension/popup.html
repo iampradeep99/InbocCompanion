@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" class="companion-window">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Inbox Companion</title><link rel="stylesheet" href="styles.css"></head>
+<body class="popup">
+  <header><div class="brand-mark">✦</div><div class="brand-copy"><h1>Inbox Companion</h1><p id="account">Your day, a little lighter.</p></div><div class="header-actions"><button class="expand-button" id="expand" title="Open a larger dashboard" aria-label="Open larger dashboard">↗ <span>Expand</span></button><button class="icon-button" id="settings" title="Settings" aria-label="Settings">⚙</button></div></header>
+  <main>
+    <section class="intro"><div class="intro-copy"><span class="eyebrow">YOUR PERSONAL ASSISTANT</span><h2>A little clarity.<br> A better day.</h2><p>Your important mail, thoughtful replies,<br>and everything coming up next.</p></div><div class="intro-art" aria-hidden="true"><span class="intro-star">✳</span><span class="art-dot"></span></div></section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section id="connect-panel" class="card" hidden><h3>Bring your day together</h3><p>Connect Gmail and Google Calendar to find important messages and prepare reply drafts.</p><p class="small">Email content is sent to NVIDIA for AI analysis. Drafts are saved to Gmail for your review.</p><button id="connect" class="primary">Connect Google account ↗</button></section>
+    <div class="toolbar"><span id="sync-status">Connecting to backend…</span><button id="sync" class="quiet">↻ Sync now</button></div>
+    <nav aria-label="Views"><button data-tab="inbox" class="active">For you <span id="inbox-count">0</span></button><button data-tab="drafts">Drafts <span id="draft-count">0</span></button><button data-tab="calendar">Calendar <span id="event-count">0</span></button></nav>
+    <div id="mail-filters" class="mail-filters" role="group" aria-label="Email categories"><button data-filter="all" class="active" aria-pressed="true">All matches</button><button data-filter="job" aria-pressed="false">Job matches</button><button data-filter="direct" aria-pressed="false">Direct messages</button></div>
+    <div id="profile-prompt" class="profile-prompt" hidden><span>Add your resume summary in Settings to see relevant jobs.</span><button id="profile-settings" class="quiet">Set job profile ↗</button></div>
+    <div id="calendar-tools" class="calendar-tools" hidden><button id="new-event" class="primary compact">＋ New event</button><button id="refresh-calendar" class="quiet">↻ Refresh calendar</button></div>
+    <div id="calendar-access" class="profile-prompt" hidden><span>Allow Calendar editing to add, update, and delete events.</span><button id="calendar-reconnect" class="quiet">Reconnect Google ↗</button></div>
+    <div class="section-label"><span id="section-title">YOUR PRIORITY INBOX</span><span id="section-note">AI reviewed</span></div>
+    <section id="content" aria-live="polite"><div class="empty">Loading your day…</div></section>
+    <div id="failed" class="notice" hidden><span id="failed-text"></span> <button id="retry" class="quiet">Retry failed emails</button></div>
+  </main>
+  <footer><span class="status-dot"></span> Drafts stay yours to review <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer">Open Gmail ↗</a></footer>
+  <dialog id="event-dialog" aria-labelledby="event-dialog-title">
+    <form id="event-form">
+      <div class="editor-heading"><div><span class="eyebrow">YOUR CALENDAR</span><h2 id="event-dialog-title">New event</h2></div><button type="button" id="close-event" class="icon-button" aria-label="Close event form">×</button></div>
+      <label for="event-title">Event title</label><input id="event-title" required maxlength="200" placeholder="What’s coming up?">
+      <label class="checkbox-label"><input type="checkbox" id="event-all-day"> All-day event</label>
+      <div class="event-date-fields"><div><label for="event-start">Start</label><input id="event-start" type="datetime-local" required></div><div><label for="event-end" id="event-end-label">End</label><input id="event-end" type="datetime-local" required></div></div>
+      <p id="event-timezone" class="hint"></p>
+      <label for="event-location">Location <span class="optional">optional</span></label><input id="event-location" maxlength="1000" placeholder="Office, venue, or meeting link">
+      <div class="notes-heading"><label for="event-description">Notes <span class="optional">optional</span></label><button type="button" id="generate-event-notes" class="ai-generate">✦ Generate with AI</button></div>
+      <textarea id="event-description" maxlength="10000" rows="3" placeholder="Describe the event or add rough notes—AI can turn them into a useful description."></textarea>
+      <p class="hint ai-notes-hint">AI uses your event details and rough notes. Review the suggestion before saving.</p>
+      <p id="event-ai-status" class="ai-notes-status" role="status" hidden></p>
+      <section id="event-ai-preview" class="ai-notes-preview" hidden><label for="event-generated-notes">AI suggestion</label><textarea id="event-generated-notes" rows="5" maxlength="6000"></textarea><button type="button" id="apply-event-notes" class="primary compact">Use these notes</button><button type="button" id="discard-event-notes" class="quiet">Dismiss suggestion</button></section>
+      <p id="event-recurring-note" class="hint" hidden>This edits only this occurrence of the recurring event.</p>
+      <p id="event-form-error" class="warning" role="alert" hidden></p>
+      <div class="editor-actions"><button type="button" id="cancel-event" class="quiet">Cancel</button><button type="submit" id="save-event" class="primary">Save event</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

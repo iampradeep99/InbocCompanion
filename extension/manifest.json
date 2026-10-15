@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Inbox Companion",
+  "description": "Important Gmail messages, AI reply drafts, and Google Calendar reminders.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "alarms", "notifications"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Inbox Companion", "default_popup": "popup.html", "default_icon": "icons/icon128.png" },
+  "options_page": "options.html",
+  "icons": { "128": "icons/icon128.png" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://127.0.0.1:*" }
+}

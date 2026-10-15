@@ -1,0 +1,32 @@
+{
+  "name": "inbox-companion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Chrome assistant for Gmail drafts and Google Calendar reminders",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node server/src/index.js",
+    "dev": "node --watch server/src/index.js",
+    "test": "node --test server/test/*.test.js",
+    "check": "node scripts/check.js",
+    "test:browser": "node scripts/browser-smoke.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "googleapis": "^186.0.0",
+    "helmet": "^8.3.0",
+    "html-to-text": "^10.0.1",
+    "mailparser": "^3.9.39",
+    "nodemailer": "^10.1.1",
+    "openai": "^7.34.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}
