@@ -40,9 +40,21 @@ const google = {
 };
 const assistant = new Assistant({ store, google, analyze: async () => analysis, query: 'in:inbox', maxEmails: 20 });
 await assistant.sync();
+let ticketImportMode = 'normal';
 const app = createApp({ store, google, assistant, apiToken: token,
-  importTicket: async () => ({ title: 'Train to Jaipur', location: 'Delhi station', description: 'PNR ABC123. Coach B2, seat 24.',
-    start: new Date(now + 86400000).toISOString(), end: null, warnings: ['Arrival time missing; enter it manually.'] }),
+  importTicket: async () => {
+    const mode = ticketImportMode;
+    await new Promise(resolve => setTimeout(resolve, mode === 'slow' ? 1000 : 450));
+    if (mode === 'error') throw new Error('Provider unavailable');
+    return { title: 'Train to Jaipur', location: 'Delhi station', description: 'Carry ID. Check the platform before boarding.',
+      details: { type: 'travel', reference: 'ABC123', operator: 'Indian Railways', serviceNumber: '12345', travelClass: '3A',
+        from: 'Delhi', to: 'Jaipur', boardingPoint: 'Delhi station', bookedAt: '8 Sep 2026, 00:44', amount: '4200', currency: 'INR', paymentStatus: 'Paid',
+        passengers: [{ name: 'Alex Morgan', age: '36', gender: 'M', coach: 'B2', seat: '24', berth: 'Upper', status: 'Confirmed', amount: '2100' },
+          { name: 'Taylor Morgan', age: '27', gender: 'F', coach: 'B2', seat: '25', berth: 'Lower', status: 'Confirmed', amount: '' }],
+        custom: [{ label: 'Transaction ID', value: 'TX123' }] },
+      start: new Date(now + 86400000).toISOString(), end: mode === 'missing' ? null : new Date(now + 100800000).toISOString(),
+      warnings: mode === 'missing' ? ['Arrival time missing; enter it manually.'] : [] };
+  },
   generateEventNotes: async details => `Prepare for ${details.title}. Review the agenda and keep your resume ready. ${details.description}` });
 const server = app.listen(0, '127.0.0.1');
 await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
@@ -76,9 +88,9 @@ try {
   await page.getByRole('heading', { name: sample.subject }).waitFor();
   assert.equal(await page.locator('#profile-prompt').isVisible(), false);
   await page.getByRole('button', { name: 'All matches', exact: true }).click();
-  await page.locator('summary').click();
+  await page.getByText('Why this matters · Read email', { exact: true }).click();
   assert.ok((await page.locator('.email-body').textContent()).includes('Could you review'));
-  await page.locator('summary').click();
+  await page.getByText('Why this matters · Read email', { exact: true }).click();
   mkdirSync('docs', { recursive: true });
   await page.locator('main').evaluate(node => { node.scrollTop = 0; });
   await page.screenshot({ path: 'docs/extension-preview.png', fullPage: true });
@@ -110,23 +122,81 @@ try {
   await page.locator('#calendar-access').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'New event' }).click();
   await page.locator('#event-ticket').setInputFiles({ name: 'ticket.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nMock ticket for browser import') });
-  await page.locator('#read-event-ticket').click();
+  await page.locator('#ticket-progress').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#event-title').isDisabled(), true);
+  assert.equal(await page.locator('#save-event').isDisabled(), true);
   await page.locator('#ticket-preview').waitFor({ state: 'visible' });
-  assert.match(await page.locator('#ticket-details').textContent(), /PNR ABC123/);
-  assert.equal(await page.locator('#event-title').inputValue(), '');
-  assert.equal(sampleEvents.length, 1);
-  await page.locator('#apply-ticket').click();
   assert.equal(await page.locator('#event-title').inputValue(), 'Train to Jaipur');
-  assert.equal(await page.locator('#event-end').inputValue(), '');
-  assert.match(await page.locator('#event-description').inputValue(), /Coach B2/);
+  assert.equal(await page.locator('#event-location').inputValue(), 'Delhi station');
+  assert.ok(await page.locator('#event-start').inputValue());
+  assert.ok(await page.locator('#event-end').inputValue());
+  assert.match(await page.locator('#event-description').inputValue(), /Carry ID/);
+  assert.equal(await page.locator('#event-kind').inputValue(), 'travel');
+  assert.equal(await page.locator('#details-bookedAt').inputValue(), '8 Sep 2026, 00:44');
+  assert.equal(await page.locator('#details-amount').inputValue(), '4200');
+  assert.equal(await page.locator('.passenger-editor').count(), 2);
+  assert.equal(await page.locator('.passenger-editor').nth(0).locator('[data-field=seat]').inputValue(), '24');
+  assert.equal(await page.locator('.passenger-editor').nth(1).locator('[data-field=amount]').inputValue(), '');
+  assert.equal(await page.locator('#save-event').isDisabled(), false);
+  assert.equal(await page.locator('#ticket-progress').isVisible(), false);
+  assert.match(await page.locator('#ticket-status').textContent(), /5 fields filled automatically/);
   assert.equal(sampleEvents.length, 1);
-  await page.locator('#read-event-ticket').click();
+  await page.setViewportSize({ width: 1000, height: 1050 });
+  await page.screenshot({ path: 'docs/ticket-autofill-preview.png', fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 600, height: 600 });
+  ticketImportMode = 'missing';
+  await page.locator('#event-ticket').setInputFiles({ name: 'missing-arrival.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nMock ticket') });
   await page.locator('#ticket-preview').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#event-end').inputValue(), '');
+  assert.match(await page.locator('#ticket-status').textContent(), /missing end time/);
+  ticketImportMode = 'slow';
+  await page.locator('#event-ticket').setInputFiles({ name: 'cancel-ticket.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nMock ticket') });
+  await page.locator('#ticket-progress').waitFor({ state: 'visible' });
+  await page.locator('#cancel-ticket').click();
   await page.locator('#event-title').fill('My edited journey');
-  assert.equal(await page.locator('#ticket-preview').isVisible(), false);
+  await page.waitForTimeout(1100);
+  assert.equal(await page.locator('#event-title').inputValue(), 'My edited journey');
+  ticketImportMode = 'error';
+  await page.locator('#event-ticket').setInputFiles({ name: 'retry-ticket.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nMock ticket') });
+  await page.locator('#retry-ticket').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#event-title').inputValue(), 'My edited journey');
+  ticketImportMode = 'normal';
+  await page.locator('#retry-ticket').click();
+  await page.locator('#ticket-preview').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#event-title').inputValue(), 'Train to Jaipur');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(await page.locator('#event-title').evaluate(field => getComputedStyle(field).animationName), 'none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.locator('.passenger-editor').nth(1).locator('[data-field=seat]').fill('19');
+  await page.getByRole('button', { name: 'Save event', exact: true }).click();
+  const travelCard = page.locator('.event-card').filter({ hasText: 'Train to Jaipur' });
+  await travelCard.waitFor();
+  assert.match(await travelCard.textContent(), /Alex Morgan/);
+  assert.match(await travelCard.textContent(), /Seat number: 19/);
+  assert.match(await travelCard.textContent(), /4200 INR/);
+  await page.setViewportSize({ width: 1000, height: 1050 });
+  const calendarPreview = await context.newPage();
+  await calendarPreview.setViewportSize({ width: 1440, height: 1100 });
+  await calendarPreview.goto(`chrome-extension://${id}/popup.html?view=expanded`);
+  await calendarPreview.locator('[data-tab=calendar]').click();
+  await calendarPreview.getByRole('heading', { name: 'Train to Jaipur', exact: true }).waitFor();
+  await calendarPreview.screenshot({ path: 'docs/green-calendar-preview.png', fullPage: true, animations: 'disabled' });
+  await calendarPreview.close();
+  await travelCard.getByRole('button', { name: 'Edit', exact: true }).click();
+  assert.equal(await page.locator('.passenger-editor').nth(1).locator('[data-field=seat]').inputValue(), '19');
+  assert.equal(await page.locator('#details-reference').inputValue(), 'ABC123');
+  await page.locator('#passenger-list').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'docs/passenger-form-preview.png', fullPage: true, animations: 'disabled' });
   await page.locator('#cancel-event').click();
+  page.once('dialog', dialog => dialog.accept());
+  await travelCard.getByRole('button', { name: 'Delete', exact: true }).click();
+  await travelCard.waitFor({ state: 'hidden' });
+  await page.setViewportSize({ width: 600, height: 600 });
   await page.getByRole('button', { name: 'New event' }).click();
   await page.locator('#event-title').fill('Interview preparation');
+  await page.locator('#event-kind').selectOption('meeting');
+  await page.locator('#custom-detail-list [data-field=value]').nth(0).fill('Alex and Taylor');
+  await page.locator('#custom-detail-list [data-field=value]').nth(1).fill('Discuss the launch plan');
   const dates = await page.evaluate(() => {
     const local = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     return [local(new Date(Date.now() + 86400000)), local(new Date(Date.now() + 90000000))];
@@ -151,7 +221,11 @@ try {
   await page.getByRole('heading', { name: 'Interview preparation', exact: true }).waitFor();
   assert.equal(sampleEvents.length, 2);
   assert.match(sampleEvents.find(event => event.title === 'Interview preparation').description, /Review Node.js interview topics/);
+  assert.equal(sampleEvents.find(event => event.title === 'Interview preparation').details.type, 'meeting');
+  assert.match(await page.locator('.event-card').filter({ hasText: 'Interview preparation' }).textContent(), /Discuss the launch plan/);
   await page.locator('.event-card').filter({ hasText: 'Interview preparation' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  assert.equal(await page.locator('#event-kind').inputValue(), 'meeting');
+  assert.equal(await page.locator('#custom-detail-list [data-field=value]').nth(1).inputValue(), 'Discuss the launch plan');
   await page.locator('#event-title').fill('All-day interview preparation');
   await page.locator('#event-all-day').check();
   await page.getByRole('button', { name: 'Save event', exact: true }).click();

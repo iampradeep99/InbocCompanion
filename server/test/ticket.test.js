@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extractPdfText, createTicketImporter, MAX_PDF_BYTES } from '../src/ticket.js';
 import { createApp } from '../src/app.js';
+import { eventDetailsSchema } from '../src/event-details.js';
 
 function ticketPdf() {
   const content = 'BT /F1 12 Tf 20 250 Td (Train 12345 Delhi to Jaipur PNR ABC123 Departure 31 Oct 2026 09:00 Arrival 13:00) Tj ET';
@@ -20,13 +21,19 @@ function ticketPdf() {
   return Buffer.from(pdf);
 }
 const ticket = { title: 'Train to Jaipur', location: 'Delhi station', description: 'Train 12345. PNR ABC123.',
-  start: '2026-10-31T09:00:00+05:30', end: '2026-10-31T13:00:00+05:30', warnings: [] };
+  start: '2026-10-31T09:00:00+05:30', end: '2026-10-31T13:00:00+05:30', warnings: [],
+  details: eventDetailsSchema.parse({ type: 'travel', bookedAt: '8 Sep 2026 00:44', amount: '4200',
+    passengers: [{ name: 'Alex', seat: '24', berth: 'Upper', amount: '2100' }, { name: 'Taylor', seat: '25', berth: 'Lower' }] }) };
 
 test('real PDF extraction reads a ticket and rejects invalid PDFs', async () => {
   assert.match(await extractPdfText(ticketPdf()), /PNR ABC123/);
   await assert.rejects(extractPdfText(Buffer.from('%PDF-invalid')), /Unable to read/);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(extractPdfText(ticketPdf(), { signal: controller.signal }), /cancelled/);
+  const active = new AbortController();
+  const reading = extractPdfText(ticketPdf(), { signal: active.signal });
+  setTimeout(() => active.abort(), 10);
+  await assert.rejects(reading, /cancelled/);
 });
 
 test('ticket AI receives extracted text only and validates times and missing details', async () => {

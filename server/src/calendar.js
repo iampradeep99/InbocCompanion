@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventDetailsSchema, detailsSummary, encodeDetails, decodeDetails } from './event-details.js';
 
 export const CALENDAR_WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 export function hasCalendarWriteAccess(tokens) {
@@ -13,6 +14,7 @@ const common = {
   title: z.string().trim().min(1).max(200),
   location: z.string().max(1000).default(''),
   description: z.string().max(10000).default(''),
+  details: eventDetailsSchema.optional(),
   etag: z.string().min(1).max(300).optional(),
   requestId: z.string().regex(/^[a-f0-9]{32}$/).optional()
 };
@@ -35,13 +37,18 @@ export function parseEventInput(input, creating = false) {
 }
 
 export function eventResource(input) {
-  return { summary: input.title, location: input.location, description: input.description,
+  return { summary: input.title, location: input.location, description: (input.description || '') + (input.details ? detailsSummary(input.details) : ''),
+    ...(input.details ? { extendedProperties: { private: encodeDetails(input.details) } } : {}),
     start: input.allDay ? { date: input.start } : { dateTime: input.start, timeZone: input.timeZone },
     end: input.allDay ? { date: input.end } : { dateTime: input.end, timeZone: input.timeZone } };
 }
 
 export function normalizeEvent(event, calendarTimeZone = 'UTC') {
-  return { id: event.id, title: event.summary || '(Untitled event)', description: event.description || '',
+  const details = decodeDetails(event.extendedProperties?.private);
+  let description = event.description || '';
+  const suffix = details && detailsSummary(details);
+  if (suffix && description.endsWith(suffix)) description = description.slice(0, -suffix.length);
+  return { id: event.id, title: event.summary || '(Untitled event)', description, ...(details ? { details } : {}),
     start: event.start, end: event.end, calendarTimeZone, location: event.location || '',
     url: event.htmlLink || '', meetingUrl: event.hangoutLink || '', etag: event.etag,
     recurring: !!event.recurringEventId,

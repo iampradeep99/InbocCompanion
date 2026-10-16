@@ -1,5 +1,6 @@
 import { api, safeUrl } from './api.js';
 import { upcomingEvents } from './calendar-utils.js';
+import { mountEventDetails, fillEventDetails, readEventDetails, eventDetailsCard } from './event-details.js';
 
 const $ = selector => document.querySelector(selector);
 if (new URLSearchParams(location.search).get('view') === 'expanded') {
@@ -64,7 +65,12 @@ function render() {
   const content = $('#content');
   // Keep in-progress draft edits intact during background refresh.
   if (content.querySelector('textarea:focus') || content.querySelector('textarea[data-dirty="true"]')) return;
-  content.replaceChildren();
+  const main = $('main');
+  const scrollTop = main.scrollTop;
+  const pageScrollTop = window.scrollY;
+  const openEmails = new Set([...content.querySelectorAll('.email-card')]
+    .filter(card => card.querySelector('details')?.open).map(card => card.dataset.emailId));
+  const nextContent = document.createDocumentFragment();
   $('#section-title').textContent = { inbox: 'JOBS & DIRECT MESSAGES', drafts: 'READY FOR YOUR REVIEW', calendar: `THE NEXT ${dashboard.calendarWindowMonths || 12} MONTHS` }[tab];
   $('#section-note').textContent = tab === 'calendar' ? '15 min reminders' : tab === 'drafts' ? 'Saved in Gmail' : 'AI filtered';
   $('#mail-filters').hidden = tab !== 'inbox';
@@ -74,11 +80,20 @@ function render() {
   $('#new-event').disabled = !dashboard.connected || !dashboard.calendarCanWrite;
   $('#refresh-calendar').disabled = !dashboard.connected;
   const items = tab === 'calendar' ? currentEvents() : dashboard.emails.filter(e => tab === 'drafts' ? !!e.draftId || ['pending', 'uncertain'].includes(e.draftStatus) : !e.dismissed && (inboxFilter === 'all' || e.analysis.category === inboxFilter));
-  if (!items.length) content.append(element('div', 'empty', tab === 'calendar' ? `No upcoming events in the next ${dashboard.calendarWindowMonths || 12} months. Add something to look forward to.` : tab === 'drafts' ? 'Your reply drafts will appear here.' : 'All caught up. Relevant jobs and direct messages will appear here.'));
-  for (const item of items) content.append(tab === 'calendar' ? eventCard(item) : emailCard(item));
+  if (!items.length) nextContent.append(element('div', 'empty', tab === 'calendar' ? `No upcoming events in the next ${dashboard.calendarWindowMonths || 12} months. Add something to look forward to.` : tab === 'drafts' ? 'Your reply drafts will appear here.' : 'All caught up. Relevant jobs and direct messages will appear here.'));
+  for (const item of items) {
+    const card = tab === 'calendar' ? eventCard(item) : emailCard(item);
+    if (tab !== 'calendar' && openEmails.has(String(item.id))) card.querySelector('details').open = true;
+    nextContent.append(card);
+  }
+  // Replace in one step so the five-second refresh never collapses the list and resets scrolling.
+  content.replaceChildren(nextContent);
+  main.scrollTop = scrollTop;
+  window.scrollTo(window.scrollX, pageScrollTop);
 }
 function emailCard(email) {
   const card = element('article', 'card email-card');
+  card.dataset.emailId = email.id;
   const meta = element('div', 'card-meta');
   const from = email.from.replace(/\s*<[^>]+>/, '');
   meta.append(element('span', 'sender', from), element('span', `pill ${email.analysis.category}`, email.analysis.category === 'job' ? 'Job match' : 'Direct message'));
@@ -129,6 +144,7 @@ function eventCard(event) {
   const when = event.start.dateTime ? date.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : `${date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · All day`;
   info.append(element('span', 'event-time', when), element('h3', '', event.title));
   if (event.location) info.append(element('p', '', event.location));
+  if (event.details) info.append(eventDetailsCard(event.details));
   const actions = element('div', 'card-actions');
   actions.append(link('View event ↗', event.url));
   if (event.meetingUrl) actions.append(link('Join meeting ↗', event.meetingUrl));
@@ -157,12 +173,12 @@ function eventCard(event) {
   return card;
 }
 let editingEvent = null;
+let eventSaving = false;
 let eventRequestId;
 let notesRequest = null;
 let notesVersion = 0;
 let ticketRequest = null;
 let ticketVersion = 0;
-let ticketSuggestion = null;
 const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 function localInput(date) {
   const value = new Date(date);
@@ -189,6 +205,8 @@ function openEventForm(event = null) {
   $('#event-title').value = event?.title || '';
   $('#event-location').value = event?.location || '';
   $('#event-description').value = event?.description || '';
+  fillEventDetails(event?.details);
+  $('#pdf-details-status').hidden = true;
   const allDay = !!event?.start?.date;
   $('#event-all-day').checked = allDay;
   setDateTypes(allDay);
@@ -211,7 +229,7 @@ $('#event-all-day').addEventListener('change', () => {
 function eventDetails() {
   const allDay = $('#event-all-day').checked;
   if (!$('#event-start').value || !$('#event-end').value) throw new Error('Choose valid start and end dates.');
-  const body = { title: $('#event-title').value, location: $('#event-location').value, description: $('#event-description').value, allDay,
+  const body = { title: $('#event-title').value, location: $('#event-location').value, description: $('#event-description').value, details: readEventDetails(), allDay,
     start: allDay ? $('#event-start').value : new Date($('#event-start').value).toISOString(),
     end: allDay ? shiftDay($('#event-end').value, 1) : new Date($('#event-end').value).toISOString() };
   if (!allDay) body.timeZone = localTimeZone;
@@ -232,28 +250,61 @@ for (const id of ['#event-title', '#event-start', '#event-end', '#event-location
 }
 $('#event-dialog').addEventListener('close', resetAiNotes);
 $('#event-dialog').addEventListener('close', resetTicket);
+mountEventDetails(() => { resetAiNotes(); resetTicket(); });
+function ticketBusy(busy) {
+  $('#ticket-progress').hidden = !busy;
+  $('#event-fields').disabled = busy || eventSaving;
+  $('#save-event').disabled = busy || eventSaving;
+  $('#ticket-import').setAttribute('aria-busy', String(busy));
+}
 function resetTicket() {
   ticketVersion++;
-  ticketRequest?.abort(); ticketRequest = null; ticketSuggestion = null;
-  $('#read-event-ticket').disabled = false;
-  $('#read-event-ticket').textContent = 'Read ticket PDF';
+  ticketRequest?.abort(); ticketRequest = null;
+  ticketBusy(false);
+  $('#ticket-import').dataset.state = 'idle';
   $('#ticket-status').hidden = true;
   $('#ticket-preview').hidden = true;
+  $('#retry-ticket').hidden = true;
+  $('#ticket-file-name').hidden = true;
+  $('#ticket-upload-title').textContent = 'Drop your ticket here';
+  $('#ticket-upload-subtitle').textContent = 'or click to choose a PDF · fields fill automatically';
+  document.querySelectorAll('.ticket-filled').forEach(field => field.classList.remove('ticket-filled'));
 }
-$('#event-ticket').addEventListener('change', resetTicket);
-$('#discard-ticket').addEventListener('click', resetTicket);
-$('#read-event-ticket').addEventListener('click', async () => {
+$('#cancel-ticket').addEventListener('click', resetTicket);
+$('#retry-ticket').addEventListener('click', importSelectedTicket);
+$('#event-ticket').addEventListener('change', importSelectedTicket);
+const ticketDrop = $('#ticket-drop');
+for (const type of ['dragenter', 'dragover']) ticketDrop.addEventListener(type, event => {
+  event.preventDefault(); ticketDrop.classList.add('drag-over');
+});
+for (const type of ['dragleave', 'drop']) ticketDrop.addEventListener(type, event => {
+  event.preventDefault(); ticketDrop.classList.remove('drag-over');
+});
+ticketDrop.addEventListener('drop', event => {
+  if ($('#event-ticket').disabled || !event.dataTransfer.files.length) return;
+  if (event.dataTransfer.files.length !== 1) {
+    $('#ticket-status').textContent = 'Choose one ticket PDF at a time.'; $('#ticket-status').hidden = false; return;
+  }
+  $('#event-ticket').files = event.dataTransfer.files;
+  importSelectedTicket();
+});
+async function importSelectedTicket() {
   resetTicket(); resetAiNotes();
   const version = ticketVersion;
   const status = $('#ticket-status');
   const errorBox = $('#event-form-error'); errorBox.hidden = true;
+  const file = $('#event-ticket').files[0];
+  if (!file) return;
   try {
-    const file = $('#event-ticket').files[0];
-    if (!file || !/\.pdf$/i.test(file.name)) throw new Error('Choose a ticket PDF first.');
+    if (!/\.pdf$/i.test(file.name)) throw new Error('Choose a ticket PDF to fill your event.');
     if (!file.size || file.size > 5 * 1024 * 1024) throw new Error('Choose a PDF up to 5 MB.');
-    $('#read-event-ticket').disabled = true;
-    $('#read-event-ticket').textContent = 'Reading ticket…';
-    status.textContent = 'Reading ticket details. Your event has not been changed.'; status.hidden = false;
+    ticketBusy(true);
+    $('#ticket-import').dataset.state = 'processing';
+    $('#ticket-upload-title').textContent = 'A little reading, a little magic';
+    $('#ticket-upload-subtitle').textContent = 'Turning your ticket into an event…';
+    $('#ticket-file-name').textContent = file.name; $('#ticket-file-name').hidden = false;
+    $('#ticket-phase').textContent = 'Opening your PDF…';
+    status.textContent = 'Processing ticket. Event fields will fill automatically.'; status.hidden = false;
     const pdf = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(',')[1]);
@@ -261,39 +312,56 @@ $('#read-event-ticket').addEventListener('click', async () => {
       reader.readAsDataURL(file);
     });
     if (version !== ticketVersion) return;
+    $('#ticket-phase').textContent = 'Reading event, booking details, passengers & seats…';
     ticketRequest = new AbortController();
     const result = await api('/api/events/import-ticket', { method: 'POST', body: JSON.stringify({ pdf, timeZone: localTimeZone }), timeoutMs: 115000, signal: ticketRequest.signal });
     if (version !== ticketVersion || !$('#event-dialog').open) return;
-    ticketSuggestion = result.ticket;
-    const ticket = ticketSuggestion;
-    $('#ticket-details').textContent = [ticket.title || 'Title missing',
-      `Start: ${ticket.start ? localInput(ticket.start).replace('T', ' ') : 'Not found — enter manually'}`,
-      `End: ${ticket.end ? localInput(ticket.end).replace('T', ' ') : 'Not found — enter manually'}`,
-      `Times displayed in ${localTimeZone}`, ticket.location, ticket.description,
-      ...ticket.warnings.map(warning => `Review: ${warning}`)].filter(Boolean).join('\n\n');
+    const ticket = result.ticket;
+    resetAiNotes();
+    fillEventDetails(ticket.details);
+    $('#event-all-day').checked = false;
+    setDateTypes(false);
+    const fields = { '#event-title': ticket.title, '#event-location': ticket.location,
+      '#event-description': ticket.description, '#event-start': ticket.start ? localInput(ticket.start) : '',
+      '#event-end': ticket.end ? localInput(ticket.end) : '' };
+    let filled = 1; // The category is also filled by AI.
+    const category = $('#event-kind').selectedOptions[0].textContent;
+    for (const field of document.querySelectorAll('#structured-details input, #event-kind')) {
+      if (!field.value) continue;
+      field.classList.add('ticket-filled');
+      field.style.setProperty('--fill-delay', `${Math.min(filled, 10) * 70}ms`);
+      if (field.id !== 'event-kind') filled++;
+    }
+    const detailCount = filled - 1;
+    const detailsStatus = $('#pdf-details-status');
+    detailsStatus.hidden = false;
+    detailsStatus.textContent = detailCount
+      ? `AI filled ${detailCount} detail fields from your PDF, including ${ticket.details?.passengers?.length || 0} passenger(s). Review the extracted values below.`
+      : 'AI identified the category but could not read further structured details from this PDF. Check the source document or try a clearer text-based copy.';
+    for (const [id, value] of Object.entries(fields)) {
+      const field = $(id); field.value = value || '';
+      if (value) { field.classList.add('ticket-filled'); field.style.setProperty('--fill-delay', `${filled++ * 70}ms`); }
+    }
+    const missing = [!ticket.title && 'title', !ticket.start && 'start time', !ticket.end && 'end time'].filter(Boolean);
+    const warnings = ticket.warnings || [];
+    $('#ticket-details').textContent = [...warnings, ...missing.map(name => `The ticket did not provide a clear ${name}. Enter it below.`), `Times displayed in ${localTimeZone}. Check the original ticket before saving.`].join('\n\n');
     $('#ticket-preview').hidden = false;
-    status.textContent = 'Review the extracted details. “Use ticket details” replaces the event fields; Save event adds them to Calendar.';
+    $('#ticket-preview').open = missing.length > 0;
+    $('#ticket-import').dataset.state = 'complete';
+    $('#ticket-upload-title').textContent = 'Your ticket, now an event';
+    $('#ticket-upload-subtitle').textContent = 'Choose another PDF to replace these details';
+    status.textContent = `AI detected: ${category}. ` + (missing.length ? `${filled} fields filled. Add the missing ${missing.join(' and ')} below.` : `${filled} fields filled automatically. Review your event and save when ready.`);
   } catch (error) {
     if (version !== ticketVersion) return;
-    status.hidden = true; errorBox.textContent = error.message; errorBox.hidden = false;
+    $('#ticket-import').dataset.state = 'error';
+    $('#ticket-upload-title').textContent = 'Let’s try that ticket again';
+    $('#ticket-upload-subtitle').textContent = 'Choose another PDF or retry below';
+    status.textContent = error.message; status.hidden = false;
+    $('#retry-ticket').hidden = false;
   } finally {
-    if (version === ticketVersion) { $('#read-event-ticket').disabled = false; $('#read-event-ticket').textContent = 'Read ticket PDF'; ticketRequest = null; }
+    if (version === ticketVersion) { ticketBusy(false); ticketRequest = null; }
   }
-});
-$('#apply-ticket').addEventListener('click', () => {
-  if (!ticketSuggestion) return;
-  const ticket = ticketSuggestion;
-  resetTicket(); resetAiNotes();
-  $('#event-title').value = ticket.title;
-  $('#event-location').value = ticket.location;
-  $('#event-description').value = ticket.description;
-  $('#event-all-day').checked = false;
-  setDateTypes(false);
-  $('#event-start').value = ticket.start ? localInput(ticket.start) : '';
-  $('#event-end').value = ticket.end ? localInput(ticket.end) : '';
-  $('#ticket-status').textContent = 'Ticket details added. Check dates, times and any missing fields, then choose Save event.';
-  $('#ticket-status').hidden = false;
-});
+}
 $('#generate-event-notes').addEventListener('click', async () => {
   if (!$('#event-form').reportValidity()) return;
   resetAiNotes();
@@ -333,8 +401,11 @@ $('#event-form').addEventListener('submit', async event => {
   resetTicket();
   resetAiNotes();
   $('#generate-event-notes').disabled = true;
+  eventSaving = true;
+  ticketBusy(false);
   const button = $('#save-event'); button.disabled = true;
-  $('#read-event-ticket').disabled = true;
+  $('#event-ticket').disabled = true;
+  $('#retry-ticket').disabled = true;
   $('#close-event').disabled = $('#cancel-event').disabled = true;
   const formError = $('#event-form-error'); formError.hidden = true;
   try {
@@ -348,9 +419,9 @@ $('#event-form').addEventListener('submit', async event => {
     notice(visible ? 'Event saved to Google Calendar.' : 'Event saved to Google Calendar. It is outside the upcoming calendar view.', false);
     chrome.runtime.sendMessage({ type: 'refresh' });
   } catch (error) { formError.textContent = error.message; formError.hidden = false; }
-  finally { button.disabled = false; $('#generate-event-notes').disabled = false; $('#read-event-ticket').disabled = false; $('#close-event').disabled = $('#cancel-event').disabled = false; }
+  finally { eventSaving = false; ticketBusy(false); button.disabled = false; $('#generate-event-notes').disabled = false; $('#event-ticket').disabled = false; $('#retry-ticket').disabled = false; $('#close-event').disabled = $('#cancel-event').disabled = false; }
 });
-$('#event-dialog').addEventListener('cancel', event => { if ($('#save-event').disabled) event.preventDefault(); });
+$('#event-dialog').addEventListener('cancel', event => { if ($('#save-event').disabled && $('#ticket-import').dataset.state !== 'processing') event.preventDefault(); });
 $('#refresh-calendar').addEventListener('click', event => action(event.currentTarget, async () => {
   await api('/api/events/refresh', { method: 'POST' }); await load();
   notice('Calendar refreshed.', false); chrome.runtime.sendMessage({ type: 'refresh' });

@@ -65,6 +65,11 @@ test('Google adapter pages a full year, preserves recurrence instances, guards w
   const created = await provider.saveEvent(parseEventInput(input, true));
   const retry = await provider.saveEvent(parseEventInput(input, true));
   assert.equal(created.id, retry.id);
+  await provider.saveEvent(parseEventInput({ ...input, details: { type: 'travel', passengers: [{ name: 'Alex', seat: '24' }] } }, true));
+  const detailedInsert = calls.filter(call => call[0] === 'insert').at(-1)[1].requestBody;
+  assert.equal(detailedInsert.extendedProperties.private.inboxCompanionRequest, input.requestId);
+  assert.ok(detailedInsert.extendedProperties.private.icDetailsCount);
+  assert.ok(Object.values(detailedInsert.extendedProperties.private).every(value => value !== null));
   const updated = await provider.saveEvent(parseEventInput({ title: 'All-day planning', allDay: true, start: '2026-10-31', end: '2026-11-01', etag: 'v1' }), 'instance');
   assert.equal(updated.title, 'All-day planning');
   const patch = calls.find(call => call[0] === 'patch');

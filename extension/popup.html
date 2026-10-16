@@ -21,18 +21,40 @@
   <dialog id="event-dialog" aria-labelledby="event-dialog-title">
     <form id="event-form">
       <div class="editor-heading"><div><span class="eyebrow">YOUR CALENDAR</span><h2 id="event-dialog-title">New event</h2></div><button type="button" id="close-event" class="icon-button" aria-label="Close event form">×</button></div>
-      <section class="ticket-import"><label for="event-ticket">Import ticket PDF <span class="optional">optional</span></label><input id="event-ticket" type="file" accept="application/pdf,.pdf"><button type="button" id="read-event-ticket" class="ai-generate">Read ticket PDF</button><p class="ticket-hint">Up to 5 MB / 10 pages. Ticket text is sent to NVIDIA to extract details. Text-based PDFs only; the PDF itself is not saved or attached to Calendar.</p><p id="ticket-status" class="ai-notes-status" role="status" hidden></p><section id="ticket-preview" class="ai-notes-preview" hidden><strong>Review ticket details</strong><pre id="ticket-details"></pre><button type="button" id="apply-ticket" class="primary compact">Use ticket details</button><button type="button" id="discard-ticket" class="quiet">Dismiss</button></section></section>
+      <section id="ticket-import" class="ticket-import" data-state="idle" aria-label="Import a ticket">
+        <div class="ticket-heading"><span class="ticket-kicker">FROM TICKET TO CALENDAR</span><span class="ticket-badge">✦ Auto-fill</span></div>
+        <label for="event-ticket" id="ticket-drop" class="ticket-drop">
+          <span class="ticket-document" aria-hidden="true"><svg viewBox="0 0 32 38" fill="none"><path d="M7 2h12l8 8v25H7z"/><path d="M19 2v9h8M12 18h10M12 23h10M12 28h6"/></svg><span class="ticket-scan"></span></span>
+          <span class="ticket-drop-copy"><strong id="ticket-upload-title">Drop your ticket here</strong><span id="ticket-upload-subtitle">or click to choose a PDF · fields fill automatically</span><span id="ticket-file-name" hidden></span></span>
+          <input id="event-ticket" type="file" accept="application/pdf,.pdf" aria-label="Choose ticket PDF for automatic event details">
+        </label>
+        <div id="ticket-progress" class="ticket-progress" hidden><div class="ticket-progress-track"><span></span></div><div class="ticket-processing-line"><span class="ticket-spinner" aria-hidden="true"></span><span id="ticket-phase">Reading your ticket…</span><button type="button" id="cancel-ticket" class="quiet">Cancel</button></div><p>Finding dates, places & booking details. You can choose another PDF anytime.</p></div>
+        <p id="ticket-status" class="ticket-result" role="status" hidden></p>
+        <button type="button" id="retry-ticket" class="quiet" hidden>Try this PDF again</button>
+        <details id="ticket-preview" class="ticket-extracted" hidden><summary>Extraction notes</summary><pre id="ticket-details"></pre></details>
+        <p class="ticket-hint">Text-based PDF · up to 5 MB / 10 pages. Selected ticket text is sent to NVIDIA. Your PDF is not stored or attached to Calendar.</p>
+      </section>
+      <fieldset id="event-fields"><legend class="visually-hidden">Event details</legend>
       <label for="event-title">Event title</label><input id="event-title" required maxlength="200" placeholder="What’s coming up?">
       <label class="checkbox-label"><input type="checkbox" id="event-all-day"> All-day event</label>
       <div class="event-date-fields"><div><label for="event-start">Start</label><input id="event-start" type="datetime-local" required></div><div><label for="event-end" id="event-end-label">End</label><input id="event-end" type="datetime-local" required></div></div>
       <p id="event-timezone" class="hint"></p>
       <label for="event-location">Location <span class="optional">optional</span></label><input id="event-location" maxlength="1000" placeholder="Office, venue, or meeting link">
+      <section id="structured-details" class="structured-details">
+        <div class="details-section-heading"><div><span class="eyebrow">A PLACE FOR EVERY DETAIL</span><h3>Make it yours.</h3></div><span class="leaf-mark" aria-hidden="true">❧</span></div>
+        <p id="pdf-details-status" class="detail-help" role="status" hidden></p>
+        <label for="event-kind">What kind of event?</label><select id="event-kind" aria-describedby="event-kind-hint"><option value="general">Personal event</option><option value="travel">Travel & tickets</option><option value="meeting">Meeting</option><option value="appointment">Appointment</option><option value="celebration">Celebration</option><option value="custom">Something else</option></select>
+        <p id="event-kind-hint" class="detail-help">AI selects the category and fills details from your PDF. You can change them anytime.</p>
+        <div id="travel-details" hidden><h4>Booking & journey</h4><div id="booking-fields" class="detail-grid"></div><div class="detail-section-title"><h4>Passengers & seats</h4><button type="button" id="add-passenger" class="detail-add">＋ Add passenger</button></div><p class="detail-help">A separate seat, berth and fare for every traveller. Leave anything unlisted blank.</p><div id="passenger-list"></div></div>
+        <div class="detail-section-title"><h4>Additional details</h4><button type="button" id="add-custom-detail" class="detail-add">＋ Add detail</button></div><p class="detail-help">An agenda, booking fee, organiser or anything else you want to remember.</p><div id="custom-detail-list"></div>
+      </section>
       <div class="notes-heading"><label for="event-description">Notes <span class="optional">optional</span></label><button type="button" id="generate-event-notes" class="ai-generate">✦ Generate with AI</button></div>
       <textarea id="event-description" maxlength="10000" rows="3" placeholder="Describe the event or add rough notes—AI can turn them into a useful description."></textarea>
       <p class="hint ai-notes-hint">AI uses your event details and rough notes. Review the suggestion before saving.</p>
       <p id="event-ai-status" class="ai-notes-status" role="status" hidden></p>
       <section id="event-ai-preview" class="ai-notes-preview" hidden><label for="event-generated-notes">AI suggestion</label><textarea id="event-generated-notes" rows="5" maxlength="6000"></textarea><button type="button" id="apply-event-notes" class="primary compact">Use these notes</button><button type="button" id="discard-event-notes" class="quiet">Dismiss suggestion</button></section>
       <p id="event-recurring-note" class="hint" hidden>This edits only this occurrence of the recurring event.</p>
+      </fieldset>
       <p id="event-form-error" class="warning" role="alert" hidden></p>
       <div class="editor-actions"><button type="button" id="cancel-event" class="quiet">Cancel</button><button type="submit" id="save-event" class="primary">Save event</button></div>
     </form>

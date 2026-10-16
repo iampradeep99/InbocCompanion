@@ -1,4 +1,5 @@
-import { google } from 'googleapis';
+import { gmail as gmailApi, auth as googleAuth } from 'googleapis/build/src/apis/gmail/index.js';
+import { calendar as calendarApi } from 'googleapis/build/src/apis/calendar/index.js';
 import { parseEmail, buildReply } from './mail.js';
 import { CALENDAR_WRITE_SCOPE, hasCalendarWriteAccess, eventResource, normalizeEvent } from './calendar.js';
 import { addMonths } from '../../extension/calendar-utils.js';
@@ -10,14 +11,14 @@ export const SCOPES = [
 ];
 
 export function createGoogle(config, store, clients = {}) {
-  const auth = new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
+  const auth = new googleAuth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
   if (store.data.tokens) auth.setCredentials(store.data.tokens);
   auth.on('tokens', tokens => {
     store.data.tokens = { ...store.data.tokens, ...tokens };
     store.save();
   });
-  const gmail = clients.gmail || google.gmail({ version: 'v1', auth });
-  const calendar = clients.calendar || google.calendar({ version: 'v3', auth });
+  const gmail = clients.gmail || gmailApi({ version: 'v1', auth });
+  const calendar = clients.calendar || calendarApi({ version: 'v3', auth });
   function requireCalendarWrite() {
     if (!hasCalendarWriteAccess(store.data.tokens)) throw Object.assign(new Error('Reconnect Google in Settings and allow Calendar editing to add, edit, or delete events.'), { status: 403, reconnectRequired: true });
   }
@@ -25,12 +26,12 @@ export function createGoogle(config, store, clients = {}) {
     auth,
     canWriteEvents: () => hasCalendarWriteAccess(store.data.tokens),
     async connect(code) {
-      const candidate = new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
+      const candidate = new googleAuth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
       const { tokens } = await candidate.getToken(code);
       const granted = new Set((tokens.scope || '').split(' '));
       if (SCOPES.some(scope => !granted.has(scope))) throw new Error('Please grant Gmail read, draft, and calendar access when connecting.');
       candidate.setCredentials(tokens);
-      const { data } = await google.gmail({ version: 'v1', auth: candidate }).users.getProfile({ userId: 'me' });
+      const { data } = await gmailApi({ version: 'v1', auth: candidate }).users.getProfile({ userId: 'me' });
       // This local app supports one account. Clear old findings on account change.
       if (store.data.account && store.data.account !== data.emailAddress) {
         store.data.emails = {}; store.data.events = []; store.data.lastSync = null;
@@ -120,7 +121,7 @@ export function createGoogle(config, store, clients = {}) {
       }
       try {
         const { data } = await calendar.events.insert({ calendarId, sendUpdates: 'none', requestBody: { ...resource,
-          id: input.requestId, extendedProperties: { private: { inboxCompanionRequest: input.requestId } } } }, { retry: false });
+          id: input.requestId, extendedProperties: { private: { ...Object.fromEntries(Object.entries(resource.extendedProperties?.private || {}).filter(([, value]) => value !== null)), inboxCompanionRequest: input.requestId } } } }, { retry: false });
         return normalizeEvent(data, store.data.calendarTimeZone || input.timeZone);
       } catch (error) {
         if (Number(error.code || error.status || error.response?.status) !== 409) throw error;
