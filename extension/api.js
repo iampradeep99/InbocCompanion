@@ -21,7 +21,7 @@ export async function api(path, options = {}) {
     return data;
   } catch (error) {
     if (externalSignal?.aborted) throw error;
-    if (error.name === 'AbortError' && timeoutMs > 15000) throw new Error('AI is taking too long. Your notes are unchanged; please try again.');
+    if (error.name === 'AbortError' && timeoutMs > 15000) throw new Error('AI is taking too long. Your event fields are unchanged; please try again.');
     if (error instanceof TypeError || error.name === 'AbortError') throw new Error('Backend unavailable. Run npm start and check the address in Settings.');
     throw error;
   } finally { clearTimeout(timer); externalSignal?.removeEventListener('abort', abort); }

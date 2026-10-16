@@ -160,6 +160,9 @@ let editingEvent = null;
 let eventRequestId;
 let notesRequest = null;
 let notesVersion = 0;
+let ticketRequest = null;
+let ticketVersion = 0;
+let ticketSuggestion = null;
 const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 function localInput(date) {
   const value = new Date(date);
@@ -176,6 +179,7 @@ function setDateTypes(allDay) {
   $('#event-timezone').textContent = allDay ? 'All-day dates follow your Google Calendar’s timezone.' : `Times are in ${localTimeZone} (this computer).`;
 }
 function openEventForm(event = null) {
+  resetTicket();
   resetAiNotes();
   editingEvent = event;
   eventRequestId = crypto.randomUUID().replaceAll('-', '');
@@ -224,8 +228,72 @@ function resetAiNotes() {
 }
 for (const id of ['#event-title', '#event-start', '#event-end', '#event-location', '#event-description', '#event-all-day']) {
   $(id).addEventListener('input', resetAiNotes);
+  $(id).addEventListener('input', resetTicket);
 }
 $('#event-dialog').addEventListener('close', resetAiNotes);
+$('#event-dialog').addEventListener('close', resetTicket);
+function resetTicket() {
+  ticketVersion++;
+  ticketRequest?.abort(); ticketRequest = null; ticketSuggestion = null;
+  $('#read-event-ticket').disabled = false;
+  $('#read-event-ticket').textContent = 'Read ticket PDF';
+  $('#ticket-status').hidden = true;
+  $('#ticket-preview').hidden = true;
+}
+$('#event-ticket').addEventListener('change', resetTicket);
+$('#discard-ticket').addEventListener('click', resetTicket);
+$('#read-event-ticket').addEventListener('click', async () => {
+  resetTicket(); resetAiNotes();
+  const version = ticketVersion;
+  const status = $('#ticket-status');
+  const errorBox = $('#event-form-error'); errorBox.hidden = true;
+  try {
+    const file = $('#event-ticket').files[0];
+    if (!file || !/\.pdf$/i.test(file.name)) throw new Error('Choose a ticket PDF first.');
+    if (!file.size || file.size > 5 * 1024 * 1024) throw new Error('Choose a PDF up to 5 MB.');
+    $('#read-event-ticket').disabled = true;
+    $('#read-event-ticket').textContent = 'Reading ticket…';
+    status.textContent = 'Reading ticket details. Your event has not been changed.'; status.hidden = false;
+    const pdf = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('The PDF could not be opened. Choose it again.'));
+      reader.readAsDataURL(file);
+    });
+    if (version !== ticketVersion) return;
+    ticketRequest = new AbortController();
+    const result = await api('/api/events/import-ticket', { method: 'POST', body: JSON.stringify({ pdf, timeZone: localTimeZone }), timeoutMs: 115000, signal: ticketRequest.signal });
+    if (version !== ticketVersion || !$('#event-dialog').open) return;
+    ticketSuggestion = result.ticket;
+    const ticket = ticketSuggestion;
+    $('#ticket-details').textContent = [ticket.title || 'Title missing',
+      `Start: ${ticket.start ? localInput(ticket.start).replace('T', ' ') : 'Not found — enter manually'}`,
+      `End: ${ticket.end ? localInput(ticket.end).replace('T', ' ') : 'Not found — enter manually'}`,
+      `Times displayed in ${localTimeZone}`, ticket.location, ticket.description,
+      ...ticket.warnings.map(warning => `Review: ${warning}`)].filter(Boolean).join('\n\n');
+    $('#ticket-preview').hidden = false;
+    status.textContent = 'Review the extracted details. “Use ticket details” replaces the event fields; Save event adds them to Calendar.';
+  } catch (error) {
+    if (version !== ticketVersion) return;
+    status.hidden = true; errorBox.textContent = error.message; errorBox.hidden = false;
+  } finally {
+    if (version === ticketVersion) { $('#read-event-ticket').disabled = false; $('#read-event-ticket').textContent = 'Read ticket PDF'; ticketRequest = null; }
+  }
+});
+$('#apply-ticket').addEventListener('click', () => {
+  if (!ticketSuggestion) return;
+  const ticket = ticketSuggestion;
+  resetTicket(); resetAiNotes();
+  $('#event-title').value = ticket.title;
+  $('#event-location').value = ticket.location;
+  $('#event-description').value = ticket.description;
+  $('#event-all-day').checked = false;
+  setDateTypes(false);
+  $('#event-start').value = ticket.start ? localInput(ticket.start) : '';
+  $('#event-end').value = ticket.end ? localInput(ticket.end) : '';
+  $('#ticket-status').textContent = 'Ticket details added. Check dates, times and any missing fields, then choose Save event.';
+  $('#ticket-status').hidden = false;
+});
 $('#generate-event-notes').addEventListener('click', async () => {
   if (!$('#event-form').reportValidity()) return;
   resetAiNotes();
@@ -262,9 +330,11 @@ $('#apply-event-notes').addEventListener('click', () => {
 $('#discard-event-notes').addEventListener('click', resetAiNotes);
 $('#event-form').addEventListener('submit', async event => {
   event.preventDefault();
+  resetTicket();
   resetAiNotes();
   $('#generate-event-notes').disabled = true;
   const button = $('#save-event'); button.disabled = true;
+  $('#read-event-ticket').disabled = true;
   $('#close-event').disabled = $('#cancel-event').disabled = true;
   const formError = $('#event-form-error'); formError.hidden = true;
   try {
@@ -278,7 +348,7 @@ $('#event-form').addEventListener('submit', async event => {
     notice(visible ? 'Event saved to Google Calendar.' : 'Event saved to Google Calendar. It is outside the upcoming calendar view.', false);
     chrome.runtime.sendMessage({ type: 'refresh' });
   } catch (error) { formError.textContent = error.message; formError.hidden = false; }
-  finally { button.disabled = false; $('#generate-event-notes').disabled = false; $('#close-event').disabled = $('#cancel-event').disabled = false; }
+  finally { button.disabled = false; $('#generate-event-notes').disabled = false; $('#read-event-ticket').disabled = false; $('#close-event').disabled = $('#cancel-event').disabled = false; }
 });
 $('#event-dialog').addEventListener('cancel', event => { if ($('#save-event').disabled) event.preventDefault(); });
 $('#refresh-calendar').addEventListener('click', event => action(event.currentTarget, async () => {

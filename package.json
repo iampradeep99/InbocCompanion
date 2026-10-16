@@ -24,6 +24,7 @@
     "mailparser": "^3.9.39",
     "nodemailer": "^10.1.1",
     "openai": "^7.34.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {

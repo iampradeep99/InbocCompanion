@@ -7,6 +7,7 @@ import { Assistant } from './assistant.js';
 import { createApp } from './app.js';
 import { DEFAULT_QUERY, LEGACY_QUERY } from './relevance.js';
 import { serverConfig } from './config.js';
+import { createTicketImporter } from './ticket.js';
 
 for (const name of ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'NVIDIA_API_KEY', 'API_TOKEN', 'ENCRYPTION_KEY']) {
   if (!process.env[name]?.trim()) throw new Error(`Missing ${name}. Run npm run setup and fill in .env.`);
@@ -27,6 +28,7 @@ const query = !process.env.GMAIL_QUERY || process.env.GMAIL_QUERY === LEGACY_QUE
 const assistant = new Assistant({ store, google, analyze: createAnalyzer({ apiKey: process.env.NVIDIA_API_KEY,
   model: process.env.NVIDIA_MODEL || 'openai/gpt-oss-20b' }), query, maxEmails, calendarMonths });
 const app = createApp({ assistant, google, store, apiToken: process.env.API_TOKEN, allowedHosts,
+  importTicket: createTicketImporter({ apiKey: process.env.NVIDIA_API_KEY, model: process.env.NVIDIA_MODEL || 'openai/gpt-oss-20b' }),
   generateEventNotes: createEventNotesGenerator({ apiKey: process.env.NVIDIA_API_KEY, model: process.env.NVIDIA_MODEL || 'openai/gpt-oss-20b' }) });
 const server = app.listen(port, host, () => console.log(`Inbox Companion listening at http://${host}:${port}`));
 const sync = () => assistant.sync().catch(() => console.error('Sync failed; check local storage permissions and configuration.'));

@@ -5,8 +5,9 @@ import { SCOPES } from './google.js';
 import { friendlyError } from './assistant.js';
 import { z } from 'zod';
 import { parseEventInput, parseEventDetails, calendarError } from './calendar.js';
+import { MAX_PDF_BYTES } from './ticket.js';
 
-export function createApp({ assistant, google, store, apiToken, generateEventNotes, allowedHosts = ['127.0.0.1', 'localhost'] }) {
+export function createApp({ assistant, google, store, apiToken, generateEventNotes, importTicket, allowedHosts = ['127.0.0.1', 'localhost'] }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
@@ -25,7 +26,8 @@ export function createApp({ assistant, google, store, apiToken, generateEventNot
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
-  app.use(express.json({ limit: '64kb' }));
+  const json = express.json({ limit: '64kb' });
+  app.use((req, res, next) => req.path === '/api/events/import-ticket' ? next() : json(req, res, next));
   const states = new Map();
   app.get('/health', (_req, res) => res.json({ ok: true, name: 'Inbox Companion' }));
   app.get('/auth/google/callback', async (req, res) => {
@@ -59,6 +61,25 @@ export function createApp({ assistant, google, store, apiToken, generateEventNot
     const result = calendarError(error);
     res.status(result.status).json(result);
   }
+  app.post('/api/events/import-ticket', express.json({ limit: '7mb' }), async (req, res) => {
+    const input = z.object({ pdf: z.string().min(8).max(Math.ceil(MAX_PDF_BYTES / 3) * 4),
+      timeZone: z.string().max(100).refine(value => { try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; } }) }).strict().safeParse(req.body);
+    if (!input.success || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.data.pdf) || input.data.pdf.length % 4) return res.status(400).json({ error: 'Upload a PDF up to 5 MB and choose a valid timezone.' });
+    const pdf = Buffer.from(input.data.pdf, 'base64');
+    if (pdf.length > MAX_PDF_BYTES || pdf.subarray(0, 5).toString() !== '%PDF-') return res.status(400).json({ error: 'Upload a valid PDF up to 5 MB.' });
+    if (!importTicket) return res.status(503).json({ error: 'Ticket import is not configured on this backend.' });
+    const controller = new AbortController();
+    res.on('close', () => { if (!res.writableEnded) controller.abort(); });
+    try {
+      const ticket = await importTicket(pdf, input.data.timeZone, { signal: controller.signal });
+      if (!res.destroyed) res.json({ ticket });
+    } catch (error) {
+      if (res.destroyed) return;
+      if (error.status === 400) return res.status(400).json({ error: error.message });
+      if (error.status === 429) return res.status(429).json({ error: 'AI rate limit reached. Try importing the ticket shortly.' });
+      res.status(502).json({ error: 'Ticket details could not be extracted. Check the backend AI configuration or enter details manually.' });
+    }
+  });
   app.post('/api/events/generate-notes', async (req, res) => {
     let details;
     try { details = parseEventDetails(req.body); }

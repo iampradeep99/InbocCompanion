@@ -41,6 +41,8 @@ const google = {
 const assistant = new Assistant({ store, google, analyze: async () => analysis, query: 'in:inbox', maxEmails: 20 });
 await assistant.sync();
 const app = createApp({ store, google, assistant, apiToken: token,
+  importTicket: async () => ({ title: 'Train to Jaipur', location: 'Delhi station', description: 'PNR ABC123. Coach B2, seat 24.',
+    start: new Date(now + 86400000).toISOString(), end: null, warnings: ['Arrival time missing; enter it manually.'] }),
   generateEventNotes: async details => `Prepare for ${details.title}. Review the agenda and keep your resume ready. ${details.description}` });
 const server = app.listen(0, '127.0.0.1');
 await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
@@ -106,6 +108,23 @@ try {
   calendarWrite = true;
   await page.locator('#refresh-calendar').click();
   await page.locator('#calendar-access').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'New event' }).click();
+  await page.locator('#event-ticket').setInputFiles({ name: 'ticket.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nMock ticket for browser import') });
+  await page.locator('#read-event-ticket').click();
+  await page.locator('#ticket-preview').waitFor({ state: 'visible' });
+  assert.match(await page.locator('#ticket-details').textContent(), /PNR ABC123/);
+  assert.equal(await page.locator('#event-title').inputValue(), '');
+  assert.equal(sampleEvents.length, 1);
+  await page.locator('#apply-ticket').click();
+  assert.equal(await page.locator('#event-title').inputValue(), 'Train to Jaipur');
+  assert.equal(await page.locator('#event-end').inputValue(), '');
+  assert.match(await page.locator('#event-description').inputValue(), /Coach B2/);
+  assert.equal(sampleEvents.length, 1);
+  await page.locator('#read-event-ticket').click();
+  await page.locator('#ticket-preview').waitFor({ state: 'visible' });
+  await page.locator('#event-title').fill('My edited journey');
+  assert.equal(await page.locator('#ticket-preview').isVisible(), false);
+  await page.locator('#cancel-event').click();
   await page.getByRole('button', { name: 'New event' }).click();
   await page.locator('#event-title').fill('Interview preparation');
   const dates = await page.evaluate(() => {
