@@ -45,15 +45,27 @@ export class Assistant {
   saveEvent(input, id) {
     return this.withCalendar(async () => {
       const event = await this.google.saveEvent(input, id);
+      this.eventEmails?.upsert(event);
+      if (event.reminderEmail) {
+        this.store.data.preferences = { ...this.store.data.preferences, reminderEmail: event.reminderEmail };
+      }
       this.store.data.events = upcomingEvents([...this.store.data.events.filter(e => e.id !== event.id), event], new Date(), this.calendarMonths);
       this.store.data.calendarUpdatedAt = new Date().toISOString();
       this.store.save();
       return event;
+    }).then(event => {
+      this.flushEventEmails().catch(() => {});
+      return event;
     });
+  }
+  flushEventEmails() {
+    if (!this.eventEmails || this.stopping || this.accountChanging) return Promise.resolve();
+    return this.withCalendar(() => this.eventEmails.tick());
   }
   deleteEvent(id, etag) {
     return this.withCalendar(async () => {
       await this.google.deleteEvent(id, etag);
+      this.eventEmails?.remove(id);
       this.store.data.events = this.store.data.events.filter(event => event.id !== id);
       this.store.data.calendarUpdatedAt = new Date().toISOString();
       this.store.save();
@@ -156,6 +168,9 @@ export class Assistant {
       jobProfileConfigured: !!profile,
       calendarWindowMonths: this.calendarMonths,
       calendarCanWrite: !!this.google.canWriteEvents?.(),
+      defaultReminderEmail: data.preferences?.reminderEmail || data.account || '',
+      eventEmailIssues: Object.values(data.eventEmailJobs || {}).filter(job => job.error)
+        .map(job => ({ eventId: job.event.id, title: job.event.title, error: job.error })),
       failedEmails: Object.values(data.emails).filter(e => e.attemptContext === contextKey && e.analysisError).map(e => ({ id: e.id, error: e.analysisError, attempts: e.attempts })),
       emails: Object.values(data.emails).filter(e => e.contextKey === contextKey && e.analysis?.important).sort((a, b) => b.date.localeCompare(a.date)),
       events: upcomingEvents(data.events, new Date(), this.calendarMonths)

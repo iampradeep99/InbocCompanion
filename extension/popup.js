@@ -43,6 +43,7 @@ async function load() {
     $('#sync').disabled = !dashboard.connected || dashboard.syncing;
     $('#sync-status').textContent = dashboard.syncing ? 'Reviewing your inbox…' : dashboard.lastSync ? `Last checked ${new Date(dashboard.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Ready when you are';
     const issues = [...dashboard.errors];
+    for (const issue of dashboard.eventEmailIssues || []) issues.push(`${issue.title}: ${issue.error}`);
     if (dashboard.connected && dashboard.calendarUpdatedAt && Date.now() - new Date(dashboard.calendarUpdatedAt) > 15 * 60000) issues.push('Calendar data is older than 15 minutes.');
     notice(issues.join(' '));
     $('#inbox-count').textContent = dashboard.emails.filter(e => !e.dismissed).length;
@@ -145,6 +146,7 @@ function eventCard(event) {
   info.append(element('span', 'event-time', when), element('h3', '', event.title));
   if (event.location) info.append(element('p', '', event.location));
   if (event.details) info.append(eventDetailsCard(event.details));
+  if (event.reminderEmail) info.append(element('p', 'event-email-recipient', `Email reminders: ${event.reminderEmail}`));
   const actions = element('div', 'card-actions');
   actions.append(link('View event ↗', event.url));
   if (event.meetingUrl) actions.append(link('Join meeting ↗', event.meetingUrl));
@@ -207,6 +209,9 @@ function openEventForm(event = null) {
   $('#event-description').value = event?.description || '';
   fillEventDetails(event?.details);
   $('#pdf-details-status').hidden = true;
+  $('#event-email-enabled').checked = event ? !!event.reminderEmail : true;
+  $('#event-reminder-email').value = event?.reminderEmail || dashboard?.defaultReminderEmail || dashboard?.account || '';
+  updateEmailFields();
   const allDay = !!event?.start?.date;
   $('#event-all-day').checked = allDay;
   setDateTypes(allDay);
@@ -229,7 +234,8 @@ $('#event-all-day').addEventListener('change', () => {
 function eventDetails() {
   const allDay = $('#event-all-day').checked;
   if (!$('#event-start').value || !$('#event-end').value) throw new Error('Choose valid start and end dates.');
-  const body = { title: $('#event-title').value, location: $('#event-location').value, description: $('#event-description').value, details: readEventDetails(), allDay,
+  const body = { title: $('#event-title').value, location: $('#event-location').value, description: $('#event-description').value, details: readEventDetails(),
+    reminderEmail: $('#event-email-enabled').checked ? $('#event-reminder-email').value.trim() : '', allDay,
     start: allDay ? $('#event-start').value : new Date($('#event-start').value).toISOString(),
     end: allDay ? shiftDay($('#event-end').value, 1) : new Date($('#event-end').value).toISOString() };
   if (!allDay) body.timeZone = localTimeZone;
@@ -251,6 +257,12 @@ for (const id of ['#event-title', '#event-start', '#event-end', '#event-location
 $('#event-dialog').addEventListener('close', resetAiNotes);
 $('#event-dialog').addEventListener('close', resetTicket);
 mountEventDetails(() => { resetAiNotes(); resetTicket(); });
+function updateEmailFields() {
+  const enabled = $('#event-email-enabled').checked;
+  $('#event-reminder-email').required = enabled;
+  $('#event-reminder-email').disabled = !enabled || eventSaving;
+}
+$('#event-email-enabled').addEventListener('change', updateEmailFields);
 function ticketBusy(busy) {
   $('#ticket-progress').hidden = !busy;
   $('#event-fields').disabled = busy || eventSaving;
@@ -416,7 +428,8 @@ $('#event-form').addEventListener('submit', async event => {
     $('#event-dialog').close();
     await load();
     const visible = upcomingEvents([result.event], new Date(), dashboard?.calendarWindowMonths || 12).length;
-    notice(visible ? 'Event saved to Google Calendar.' : 'Event saved to Google Calendar. It is outside the upcoming calendar view.', false);
+    const savedMessage = visible ? 'Event saved to Google Calendar.' : 'Event saved to Google Calendar. It is outside the upcoming calendar view.';
+    notice(savedMessage + (result.event.reminderEmail ? ` Email confirmation queued for ${result.event.reminderEmail}; reminders are enabled.` : ''), false);
     chrome.runtime.sendMessage({ type: 'refresh' });
   } catch (error) { formError.textContent = error.message; formError.hidden = false; }
   finally { eventSaving = false; ticketBusy(false); button.disabled = false; $('#generate-event-notes').disabled = false; $('#event-ticket').disabled = false; $('#retry-ticket').disabled = false; $('#close-event').disabled = $('#cancel-event').disabled = false; }

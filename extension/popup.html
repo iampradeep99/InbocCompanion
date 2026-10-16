@@ -21,6 +21,12 @@
   <dialog id="event-dialog" aria-labelledby="event-dialog-title">
     <form id="event-form">
       <div class="editor-heading"><div><span class="eyebrow">YOUR CALENDAR</span><h2 id="event-dialog-title">New event</h2></div><button type="button" id="close-event" class="icon-button" aria-label="Close event form">×</button></div>
+      <section class="email-reminder-settings" aria-label="Event email reminders">
+        <label class="checkbox-label"><input type="checkbox" id="event-email-enabled" checked> Email event details & reminders</label>
+        <label for="event-reminder-email">Send to email</label>
+        <input id="event-reminder-email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com" aria-describedby="event-email-hint">
+        <p id="event-email-hint" class="detail-help">Save the event to send its complete details to this address. Then every 2 days; on the event day every 2 hours from 8am; and 3, 2 and 1 hour before it starts. All-day events use 9am. Your backend must stay running. Turn this off to stop emails.</p>
+      </section>
       <section id="ticket-import" class="ticket-import" data-state="idle" aria-label="Import a ticket">
         <div class="ticket-heading"><span class="ticket-kicker">FROM TICKET TO CALENDAR</span><span class="ticket-badge">✦ Auto-fill</span></div>
         <label for="event-ticket" id="ticket-drop" class="ticket-drop">

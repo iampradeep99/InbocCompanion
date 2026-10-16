@@ -124,7 +124,7 @@ export function createApp({ assistant, google, store, apiToken, generateEventNot
   app.put('/api/preferences', (req, res) => {
     if (typeof req.body.jobProfile !== 'string' || req.body.jobProfile.length > 12000) return res.status(400).json({ error: 'Job profile must be text up to 12,000 characters.' });
     if (assistant.accountChanging) return res.status(409).json({ error: 'Wait for the account change to finish.' });
-    store.data.preferences = { jobProfile: req.body.jobProfile.trim() };
+    store.data.preferences = { ...store.data.preferences, jobProfile: req.body.jobProfile.trim() };
     store.save();
     assistant.sync().catch(() => {});
     res.json({ ok: true });

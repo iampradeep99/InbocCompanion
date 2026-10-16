@@ -99,3 +99,61 @@ body{background:var(--bg)}
 @media(max-width:420px){.structured-details{padding:12px}.detail-grid{gap:0 8px}.event-facts{gap:10px}.event-detail-card{padding:11px}.custom-detail-editor{grid-template-columns:minmax(0,1fr) 18px}.custom-detail-editor .detail-label{grid-column:1}.custom-detail-editor .detail-value{grid-column:1}.custom-detail-editor .remove-detail{grid-column:2;grid-row:1/3}}
 
 @media(prefers-reduced-motion:reduce){.passenger-editor,.event-detail-card{animation:none!important}}
+
+/* Dark green and white workspace, with black reading text. */
+:root{--bg:#fff;--ink:#111;--muted:#111;--accent:#06452f;--border:#cbdcd2}
+body.companion-window,html.companion-window{background:#eaf1ed}
+body.popup,body.options{background:#fff;color:#111}
+body.popup header,body.popup footer,body.popup .card,body.options .card{background:#fff;border-color:#cbdcd2;color:#111}
+body.popup .intro{background:linear-gradient(115deg,#fff,#edf5f0);border-color:#bfd4c7}
+body.popup .intro h2,body.popup .intro p,body.popup header p,body.popup header h1,body.popup .eyebrow,
+body.popup .sender,body.popup .card h3,body.popup .card .summary,body.popup .card p,
+body.popup .section-label,body.popup .section-label span+span,body.popup .toolbar,body.popup .saved,
+body.popup summary,body.popup .reason,body.popup .event-time,body.popup .event-info p,
+body.popup .event-facts dt,body.popup .event-facts dd,body.popup .passenger-display-name,
+body.popup .passenger-display-name>span:last-child,body.popup .detail-help,body.popup .detail-help *,
+body.popup .ticket-drop-copy strong,body.popup .ticket-drop-copy>span,body.popup .ticket-hint,
+body.popup .ticket-result,body.popup .ticket-kicker,body.popup .ticket-progress p,
+body.popup .ticket-processing-line,body.popup .ticket-extracted,body.popup .ticket-extracted summary,
+body.popup .ticket-result,body.popup .ai-notes-status,body.popup .empty,
+body.options p,body.options .hint,body.options .profile-intro{color:#111}
+body.popup nav{background:#06452f;border-color:#06452f}
+body.popup nav button{color:#fff}
+body.popup nav button.active{background:#fff;color:#111}
+body.popup nav span{background:#deeee5;color:#111}
+body.popup .primary,body.options .primary{background:#06452f;color:#fff}
+body.popup .brand-mark,body.popup .icon-button,body.popup .expand-button,
+body.popup .toolbar .quiet,body.popup .mail-filters button,body.popup .card-actions .quiet,
+body.popup .profile-prompt,body.popup .profile-prompt .quiet,body.popup .ai-generate,
+body.popup .detail-add,body.popup .remove-detail,body.popup .quiet{color:#111;background:#f0f6f2;border-color:#c6dacf}
+body.popup .mail-filters button.active{background:#06452f;border-color:#06452f;color:#fff}
+body.popup .intro-star,body.popup .leaf-mark{color:#06452f}
+body.popup .art-dot,body.popup .status-dot,body.popup .toolbar #sync-status:before{background:#06452f}
+body.popup .intro-art{background:#e0eee5;border-color:#c6dacf}
+body.popup .pill,body.popup .pill.job,body.popup .pill.direct,body.popup .date-box,
+body.popup .event-kind-badge,body.popup .passenger-number,body.popup .passenger-chips span{background:#e1eee6;color:#111;border-color:#c6dacf}
+body.popup a,body.popup footer a,body.options a{color:#111;text-decoration:underline;text-decoration-color:#06452f;text-underline-offset:3px}
+body.popup .email-body,body.popup .draft-editor{background:#f3f7f4;color:#111;border-color:#c6dacf}
+body.popup .structured-details,body.popup .event-detail-card,body.popup .passenger-editor,
+body.popup .ticket-import,body.popup .ticket-import[data-state=complete],body.popup .ai-notes-preview{background:#f2f7f3;border-color:#bdd3c5;color:#111}
+body.popup .structured-details h3,body.popup .structured-details h4,body.popup .structured-details .eyebrow,
+body.popup .structured-details .journey-route,body.popup .passenger-caption,
+body.popup .ticket-badge,body.popup #ticket-file-name{color:#111}
+body.popup .ticket-document{background:#dfede4;color:#06452f}
+body.popup .ticket-progress-track{background:#d9e8df}
+body.popup .ticket-progress-track span{background:#06452f}
+body.popup .ticket-spinner{border-color:#c6dacf;border-top-color:#06452f}
+body.popup #event-dialog,body.popup #event-form,body.popup .editor-actions{background:#fff;color:#111}
+body.popup #event-dialog-title,body.popup #event-form label,body.popup #event-form .hint,
+body.popup #event-form .optional,body.popup #event-form .detail-field label{color:#111}
+body.popup #event-form input:not([type=checkbox]),body.popup #event-form textarea,body.popup #event-kind,
+body.options input,body.options textarea{background:#fff;color:#111;border-color:#adc9b9}
+body.popup #event-form input::placeholder,body.popup #event-form textarea::placeholder{color:#4a4a4a;opacity:1}
+body.popup #event-form input:focus-visible,body.popup #event-form textarea:focus-visible,body.popup #event-kind:focus-visible{outline:2px solid #06452f;border-color:#06452f;box-shadow:none}
+body.popup #event-form input[type=checkbox],body.options input[type=checkbox]{accent-color:#06452f}
+body.popup .ticket-import[data-state=complete] .ticket-result,body.popup .ticket-import[data-state=complete] .ticket-badge{color:#111}
+body.popup .email-reminder-settings{padding:18px;margin-bottom:22px;border:1px solid #bdd3c5;border-left:4px solid #06452f;border-radius:12px;background:#f2f7f3}
+body.popup #event-form .email-reminder-settings .checkbox-label{margin-bottom:17px}
+body.popup #event-form .email-reminder-settings input[type=email]{margin-bottom:10px}
+body.popup .email-reminder-settings .detail-help{font-size:11px;line-height:1.7}
+body.popup main::-webkit-scrollbar-thumb{background:#06452f}

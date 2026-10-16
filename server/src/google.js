@@ -1,6 +1,6 @@
 import { gmail as gmailApi, auth as googleAuth } from 'googleapis/build/src/apis/gmail/index.js';
 import { calendar as calendarApi } from 'googleapis/build/src/apis/calendar/index.js';
-import { parseEmail, buildReply } from './mail.js';
+import { parseEmail, buildReply, buildEventEmail } from './mail.js';
 import { CALENDAR_WRITE_SCOPE, hasCalendarWriteAccess, eventResource, normalizeEvent } from './calendar.js';
 import { addMonths } from '../../extension/calendar-utils.js';
 
@@ -35,6 +35,7 @@ export function createGoogle(config, store, clients = {}) {
       // This local app supports one account. Clear old findings on account change.
       if (store.data.account && store.data.account !== data.emailAddress) {
         store.data.emails = {}; store.data.events = []; store.data.lastSync = null;
+        store.data.eventEmailJobs = {};
         store.data.preferences = { jobProfile: '' };
       }
       store.data.tokens = tokens;
@@ -106,6 +107,20 @@ export function createGoogle(config, store, clients = {}) {
         pageToken = data.nextPageToken;
       } while (pageToken);
       return events;
+    },
+    async getEvent(id) {
+      const { data } = await calendar.events.get({ calendarId: config.calendarId || 'primary', eventId: id }, { timeout: 20000 });
+      if (data.status === 'cancelled') return null;
+      return normalizeEvent(data, store.data.calendarTimeZone || 'UTC');
+    },
+    async findSentEventEmail(messageId) {
+      const { data } = await gmail.users.messages.list({ userId: 'me', q: `in:sent rfc822msgid:${messageId}` }, { timeout: 20000 });
+      return data.messages?.[0]?.id || null;
+    },
+    async sendEventEmail(event, recipient, messageId, kind) {
+      const raw = await buildEventEmail(event, store.data.account, recipient, messageId, kind);
+      const { data } = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } }, { retry: false, timeout: 20000 });
+      return data.id;
     },
     async saveEvent(input, id) {
       requireCalendarWrite();

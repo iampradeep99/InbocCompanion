@@ -15,6 +15,7 @@ const common = {
   location: z.string().max(1000).default(''),
   description: z.string().max(10000).default(''),
   details: eventDetailsSchema.optional(),
+  reminderEmail: z.union([z.string().trim().email().max(254), z.literal('')]).default(''),
   etag: z.string().min(1).max(300).optional(),
   requestId: z.string().regex(/^[a-f0-9]{32}$/).optional()
 };
@@ -26,7 +27,7 @@ const eventSchema = z.discriminatedUnion('allDay', [
 
 export function parseEventDetails(input) {
   const result = eventSchema.safeParse(input);
-  if (!result.success) throw Object.assign(new Error('Enter a title, valid dates, and an end after the start. All-day end dates must be exclusive.'), { status: 400 });
+  if (!result.success) throw Object.assign(new Error('Enter a title, valid dates, an end after the start, and a valid reminder email if enabled. All-day end dates must be exclusive.'), { status: 400 });
   return result.data;
 }
 export function parseEventInput(input, creating = false) {
@@ -38,7 +39,7 @@ export function parseEventInput(input, creating = false) {
 
 export function eventResource(input) {
   return { summary: input.title, location: input.location, description: (input.description || '') + (input.details ? detailsSummary(input.details) : ''),
-    ...(input.details ? { extendedProperties: { private: encodeDetails(input.details) } } : {}),
+    extendedProperties: { private: { ...(input.details ? encodeDetails(input.details) : {}), icReminderEmail: input.reminderEmail || null } },
     start: input.allDay ? { date: input.start } : { dateTime: input.start, timeZone: input.timeZone },
     end: input.allDay ? { date: input.end } : { dateTime: input.end, timeZone: input.timeZone } };
 }
@@ -49,6 +50,7 @@ export function normalizeEvent(event, calendarTimeZone = 'UTC') {
   const suffix = details && detailsSummary(details);
   if (suffix && description.endsWith(suffix)) description = description.slice(0, -suffix.length);
   return { id: event.id, title: event.summary || '(Untitled event)', description, ...(details ? { details } : {}),
+    reminderEmail: event.extendedProperties?.private?.icReminderEmail || '',
     start: event.start, end: event.end, calendarTimeZone, location: event.location || '',
     url: event.htmlLink || '', meetingUrl: event.hangoutLink || '', etag: event.etag,
     recurring: !!event.recurringEventId,
