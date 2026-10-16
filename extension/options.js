@@ -22,7 +22,9 @@ $('#settings-form').addEventListener('submit', async event => {
   button.disabled = true;
   try {
     const url = new URL($('#backend').value);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Use a local address such as http://127.0.0.1:3210.');
+    const local = url.protocol === 'http:' && url.hostname === '127.0.0.1';
+    const render = url.protocol === 'https:' && url.hostname.endsWith('.onrender.com') && !url.port;
+    if ((!local && !render) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Use http://127.0.0.1:3210 or your HTTPS backend address on onrender.com.');
     const token = $('#token').value.trim();
     if (token.length < 32) throw new Error('Paste the complete API_TOKEN from .env (at least 32 characters).');
     await chrome.storage.local.set({ backend: url.origin, token, reminders: $('#reminders').checked });

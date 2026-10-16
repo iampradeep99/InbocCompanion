@@ -177,3 +177,30 @@ test('API requires pairing token, rejects website origins, protects OAuth state 
   const preferences = await (await fetch(`${base}/api/preferences`, { headers })).json();
   assert.equal(preferences.jobProfile, 'Node.js backend developer');
 });
+
+test('hosted API allows only configured hostnames and retains token and origin checks', async t => {
+  const { request } = await import('node:http');
+  const f = fixture();
+  const app = createApp({ ...f, apiToken: 'secret-pairing-token', allowedHosts: ['inbox.onrender.com'] });
+  const server = app.listen(0, '0.0.0.0');
+  await new Promise(resolve => server.once('listening', resolve));
+  assert.equal(server.address().address, '0.0.0.0');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  // Use node:http so the test can explicitly set the HTTP Host header.
+  const hostedRequest = (path, { headers } = {}) => new Promise((resolve, reject) => {
+    request(`${base}${path}`, { headers }, response => {
+      response.resume();
+      response.on('end', () => resolve({ status: response.statusCode, headers: new Headers(response.headers) }));
+    }).on('error', reject).end();
+  });
+  const headers = { Host: 'inbox.onrender.com', Authorization: 'Bearer secret-pairing-token', Origin: `chrome-extension://${'a'.repeat(32)}` };
+  assert.equal((await hostedRequest('/health', { headers: { Host: 'inbox.onrender.com' } })).status, 200);
+  const response = await hostedRequest('/api/dashboard', { headers });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), headers.Origin);
+  assert.equal((await hostedRequest('/api/dashboard', { headers: { Host: headers.Host } })).status, 401);
+  assert.equal((await hostedRequest('/api/dashboard', { headers: { ...headers, Host: 'evil.example' } })).status, 403);
+  assert.equal((await hostedRequest('/api/dashboard', { headers: { ...headers, Origin: 'https://evil.example' } })).status, 403);
+  assert.equal((await hostedRequest('/api/dashboard', { headers: { ...headers, Host: 'evil.example', 'X-Forwarded-Host': headers.Host } })).status, 403);
+});

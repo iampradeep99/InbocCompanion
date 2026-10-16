@@ -50,9 +50,20 @@ NVIDIA_API_KEY=your-nvidia-api-key
    npm start
    ```
 
-The server binds only to `127.0.0.1:3210`. `localhost` and `127.0.0.1` are different OAuth redirect URIs, so use the exact URI above. If you change the port, update `PORT`, `GOOGLE_REDIRECT_URI`, Google's redirect allowlist, and the extension's backend address together.
+By default the server binds to `127.0.0.1:3210`. `localhost` and `127.0.0.1` are different OAuth redirect URIs, so use the exact URI above. If you change the local port, update `PORT`, `GOOGLE_REDIRECT_URI`, Google's redirect allowlist, and the extension's backend address together.
 
 Google's compose scope also permits sending mail, although this app exposes only create/update draft operations. Testing-mode Google refresh tokens for these scopes can expire after seven days; reconnect when prompted. Public distribution requires your own Google verification and privacy-policy work. See [Google's web server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server).
+
+## Deploy the backend on Render (optional)
+
+For a Render **Web Service**, use Node 22+, build command `npm install`, start command `npm start`, and health check path `/health`. Render startup automatically binds to `0.0.0.0` on its `PORT` and uses `RENDER_EXTERNAL_URL` for the allowed hostname and default Google OAuth callback. Local startup still binds to loopback. `HOST` overrides the binding; remove a localhost `HOST` override on Render.
+
+1. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NVIDIA_API_KEY`, `API_TOKEN` (at least 32 characters), and `ENCRYPTION_KEY` (64 hexadecimal characters) in Render's environment settings. Keep these secrets stable and use your own strong random pairing token and key.
+2. Add `https://YOUR-SERVICE.onrender.com/auth/google/callback` to your Google OAuth client's authorized redirect URIs. Remove a local `GOOGLE_REDIRECT_URI` override from Render, or set it to this exact HTTPS callback.
+3. Attach a persistent disk mounted at `/var/data` and set `DATA_DIR=/var/data`. Run one service instance: encrypted state is stored in a single file. Without persistent storage, redeploys can lose the Google connection and cached data.
+4. Redeploy, reload the unpacked extension at `chrome://extensions` to apply its updated permissions, and enter `https://YOUR-SERVICE.onrender.com` as its backend address. Pair using Render's `API_TOKEN`, then connect Google.
+
+`PUBLIC_URL` can override the public HTTPS origin for server configuration. The bundled extension supports local loopback and HTTPS `*.onrender.com` addresses; custom domains also require updating its address validation, host permissions, and connection policy.
 
 ## 3. Load and pair the Chrome extension
 
@@ -100,7 +111,7 @@ Your saved job profile plus matching emails' sender, subject, and up to 16,000 b
 
 OAuth tokens, your job profile, fetched email bodies, analysis, draft text, and calendar events are saved in `data/assistant.enc.json`, encrypted with AES-256-GCM using `ENCRYPTION_KEY`. The app does not automatically expire processed email records; **Disconnect & clear local data** removes the local account/cache and attempts to revoke Google access. Existing Gmail drafts remain in Gmail. For offline removal, stop the backend and delete `data/`; revoke app access in your Google Account separately if needed. Losing `.env`'s encryption key requires resetting `data/` and reconnecting.
 
-The extension stores the pairing token and reminder history in Chrome local storage. Local API calls require this token. The backend rejects ordinary website origins and unrecognized hostnames. This is a single-user local application; do not expose its port on a public interface.
+The extension stores the pairing token and reminder history in Chrome local storage. API calls require this token. The backend rejects ordinary website origins and unrecognized hostnames. This is a single-user application. With Render hosting, encrypted backend data resides on Render; use the HTTPS service URL and keep the pairing token private.
 
 ## Development and verification
 

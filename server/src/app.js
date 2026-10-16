@@ -6,14 +6,14 @@ import { friendlyError } from './assistant.js';
 import { z } from 'zod';
 import { parseEventInput, parseEventDetails, calendarError } from './calendar.js';
 
-export function createApp({ assistant, google, store, apiToken, generateEventNotes }) {
+export function createApp({ assistant, google, store, apiToken, generateEventNotes, allowedHosts = ['127.0.0.1', 'localhost'] }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
   app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     // Reject DNS rebinding and web-page access. All API calls also require a secret.
-    if (!['127.0.0.1', 'localhost'].includes(req.hostname)) return res.status(403).json({ error: 'Local access only.' });
+    if (!allowedHosts.includes(req.hostname)) return res.status(403).json({ error: 'Backend hostname is not allowed.' });
     const origin = req.get('Origin');
     if (origin && !/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) return res.status(403).json({ error: 'Extension access only.' });
     if (origin) {
